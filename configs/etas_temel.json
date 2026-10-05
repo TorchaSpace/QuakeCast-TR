@@ -1,0 +1,14 @@
+{
+  "name": "QuakeCast-TR temel ETAS (2014-2021, Mc 3.0)",
+  "catalog": "data/processed/etas_girdi_2010_M25.csv",
+  "out_dir": "data/processed/etas/temel_2014_2021_mc30",
+  "auxiliary_start": "2010-01-01 00:00:00",
+  "timewindow_start": "2014-01-01 00:00:00",
+  "timewindow_end": "2022-01-01 00:00:00",
+  "mc": 3.0,
+  "delta_m": 0.1,
+  "coppersmith_multiplier": 100,
+  "shape_coords": [[35, 25], [44, 25], [44, 46], [35, 46], [35, 25]],
+  "theta_0": {"log10_mu": -6.0, "log10_k0": -2.5, "a": 1.8, "log10_c": -2.5, "omega": -0.02,
+              "log10_tau": 3.5, "log10_d": -0.5, "gamma": 1.2, "rho": 0.6}
+}
