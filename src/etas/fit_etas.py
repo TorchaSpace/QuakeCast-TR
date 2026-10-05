@@ -30,7 +30,8 @@ def main(cfg_path):
 
     cat = pd.read_csv(ROOT / cfg["catalog"], parse_dates=["time"])
     meta = dict(
-        catalog=cat[["time", "latitude", "longitude", "magnitude"]].copy(),
+        catalog=cat[["time", "latitude", "longitude", "magnitude"] + (["mc_current"] if cfg["mc"] == "var" else [])].copy(),
+        m_ref=cfg.get("m_ref"),
         auxiliary_start=cfg["auxiliary_start"], timewindow_start=cfg["timewindow_start"],
         timewindow_end=cfg["timewindow_end"], mc=cfg["mc"], delta_m=cfg["delta_m"],
         coppersmith_multiplier=cfg["coppersmith_multiplier"], shape_coords=cfg["shape_coords"],

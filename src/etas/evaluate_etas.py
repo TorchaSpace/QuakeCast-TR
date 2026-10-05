@@ -50,7 +50,8 @@ def background_fn(cfg, st, mdir, cat):
     if not cfg.get("free_background"):
         return (lambda lat, lon: np.full(len(lat), mu)), None
     # eğitim hedef olaylarının konumları: paketin hazırlığıyla aynı filtre
-    meta = dict(catalog=cat[["time", "latitude", "longitude", "magnitude"]].copy(), auxiliary_start=cfg["auxiliary_start"],
+    cols = ["time", "latitude", "longitude", "magnitude"] + (["mc_current"] if cfg["mc"] == "var" else [])
+    meta = dict(catalog=cat[cols].copy(), m_ref=cfg.get("m_ref"), auxiliary_start=cfg["auxiliary_start"],
                 timewindow_start=cfg["timewindow_start"], timewindow_end=cfg["timewindow_end"], mc=cfg["mc"],
                 delta_m=cfg["delta_m"], coppersmith_multiplier=cfg["coppersmith_multiplier"], shape_coords=cfg["shape_coords"],
                 theta_0=th, free_background=True, bw_sq=cfg.get("bw_sq", 2))
