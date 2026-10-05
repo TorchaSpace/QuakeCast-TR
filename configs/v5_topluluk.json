@@ -1,0 +1,14 @@
+{
+ "name": "v5 topluluk: 0.8 × (v3 + dizi-özgü verimlilik) + 0.2 × (sabit Mc 3.5 + serbest arka plan + dizi-özgü verimlilik)",
+ "ensemble": [
+  [
+   "configs/v5_dizi.json",
+   0.8
+  ],
+  [
+   "configs/v5_sabitMc_dizi.json",
+   0.2
+  ]
+ ],
+ "secim": "ağırlıklar doğrulama (2022-23) maskeli olabilirliğiyle 0.1 adımlı ızgarada seçildi (src/etas/ensemble_masked.py)"
+}

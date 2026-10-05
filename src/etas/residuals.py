@@ -43,7 +43,7 @@ def components(mdir):
     xi = responsibility_factor(tharr, beta, np.maximum(np.ceil(S.mcf.values * 10 - 1e-6) / 10 - mref, 0)) if var else np.ones(len(S))
     sc = np.exp(-beta * (M_TEST - mref))
     mu_x, mu_tot = E.background_fn(cfg, st, mdir, pd.read_csv(ROOT / cfg["catalog"], parse_dates=["time"]))
-    fs_cols = []
+    fs_cols = []; tb_idx = []; R = None
     if cfg.get("finite_source"):
         import finite_source as fs
         R = pd.read_csv(ROOT / cfg.get("ruptures", "data/processed/etas/rupturler.csv"), parse_dates=["time"])
@@ -51,8 +51,10 @@ def components(mdir):
         for j, k in enumerate(fs.match_sources(S.time.values, S.magnitude.values, R)):
             if k >= 0:
                 fs_cols.append((j, R.iloc[k], float(np.exp(-fs.log_Z_ratio(R.L.values[k], zone[j], rho)))))
+        zm = fs.zone_mask(S.t.values, S.latitude.values, S.longitude.values, R, cfg.get("zone_km"), cfg.get("zone_days"), T_ORIGIN)
+        tb_idx = sorted(set(np.nonzero(zm)[0]) | {j for j, _, _ in fs_cols})
     return dict(cfg=cfg, th=th, beta=beta, ev=ev, S=S, xi=xi, sc=sc, mu_x=mu_x, mu_tot=mu_tot, mref=mref,
-                kp=(k0, a, c, om, tau, d, g, rho), fs_cols=fs_cols)
+                kp=(k0, a, c, om, tau, d, g, rho), fs_cols=fs_cols, omega_big=cfg.get("omega_big"), tb_idx=tb_idx, R=R)
 
 
 def lam_at(C, t, lat, lon):
@@ -68,7 +70,12 @@ def lam_at(C, t, lat, lon):
             import finite_source as fs
             for j, rr, kp in C["fs_cols"]:
                 r2[:, j] = fs.dist2_to_rupture(lat[sl], lon[sl], rr); kap[j] = kp
-        out[sl] = (kap[None] * prod[None] * np.exp(-dtp / tau) / (dtp + c) ** (1 + om) / (r2 + zone[None]) ** (1 + rho) * msk).sum(1)
+        G = kap[None] * prod[None] * np.exp(-dtp / tau) / (dtp + c) ** (1 + om) / (r2 + zone[None]) ** (1 + rho)
+        if C.get("fs_cols") and C.get("omega_big") is not None:
+            from etas.inversion import upper_gamma_ext
+            for j in C["tb_idx"]:
+                G[:, j] *= fs.big_time_ratio(dtp[:, j], om, C["omega_big"], c, tau, upper_gamma_ext)
+        out[sl] = (G * msk).sum(1)
     return (out + C["mu_x"](lat, lon)) * C["sc"]
 
 

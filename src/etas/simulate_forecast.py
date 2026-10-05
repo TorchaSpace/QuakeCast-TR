@@ -137,6 +137,11 @@ class Simulator:
         self.R = None
         if cfg.get("finite_source"):
             self.R = pd.read_csv(ROOT / cfg.get("ruptures", "data/processed/etas/rupturler.csv"), parse_dates=["time"])
+        # dizi-özgü verimlilik (Bayesçi Gamma çarpanı; seq_update.py)
+        self.seq = None
+        if cfg.get("seq_nu"):
+            import seq_update as SU
+            self.seq = SU.Posterior(cfg_path, cfg["seq_nu"])
 
     def sample_bg(self, n):
         rng = self.rng
@@ -177,19 +182,40 @@ class Simulator:
         Sp, n_exp = Sp[keep].reset_index(drop=True), n_exp[keep]
         D_p = d * np.exp(g * (Sp.magnitude.values - mref))
         fsmap = {}
+        import finite_source as fs
         if self.R is not None:
-            import finite_source as fs
             for j, kk in enumerate(fs.match_sources(Sp.time.values, Sp.magnitude.values, self.R)):
                 if kk >= 0:
                     fsmap[j] = self.R.iloc[kk]
+        ob = self.cfg.get("omega_big")
+        if ob is not None and fsmap:
+            zmp = fs.zone_mask(Sp.t.values, Sp.latitude.values, Sp.longitude.values, self.R, self.cfg.get("zone_km"), self.cfg.get("zone_days"), T_ORIGIN)
+            jb = np.array(sorted(set(fsmap) | set(np.nonzero(zmp)[0])), int)
+            Gb = fs.big_expected(Sp.magnitude.values[jb], T0 - Sp.t.values[jb], T1 - Sp.t.values[jb], pars[0], mref, ob, expected_aftershocks)
+            n_exp = n_exp.copy(); n_exp[jb] = Gb * C["xi"][past][keep][jb]
+            if not hasattr(self, "TKb"):
+                self.TKb = TimeKernel(c, ob, tau)
+        if self.seq is not None:
+            if T0 > self.seq.t_last + 1:
+                print(f"UYARI: dizi hazırlığı {self.seq.t_last:.0f}. güne kadar; T0 sonrası olaylar sayılmıyor", flush=True)
+            jj = np.nonzero(past)[0][keep]
+            A_, B_ = self.seq.at(T0, jj)
+            Gm = rng.gamma(A_[None, :], 1.0 / B_[None, :], (N_SIM, len(jj)))
+            lam_mat = n_exp[None, :] * Gm
+        else:
+            lam_mat = np.broadcast_to(n_exp[None, :], (N_SIM, len(n_exp)))
         nb = rng.poisson(self.rate_bg * H, N_SIM)
         sid = np.repeat(np.arange(N_SIM), nb); n = len(sid)
         la, lo = self.sample_bg(n)
         gen = pd.DataFrame(dict(sim=sid, t=rng.uniform(T0, T1, n), lat=la, lon=lo, m=self.sample_mag(n)))
-        cnt = rng.poisson(n_exp[None, :], (N_SIM, len(n_exp)))
+        cnt = rng.poisson(lam_mat)
         sim_i, src_i = np.nonzero(cnt); reps = cnt[sim_i, src_i]
         sim_e = np.repeat(sim_i, reps); src_e = np.repeat(src_i, reps); n = len(src_e)
         tt = Sp.t.values[src_e] + TK.sample(T0 - Sp.t.values[src_e], T1 - Sp.t.values[src_e], rng)
+        if ob is not None and fsmap:
+            bsel = np.isin(src_e, jb)
+            if bsel.any():
+                tt[bsel] = Sp.t.values[src_e[bsel]] + self.TKb.sample(T0 - Sp.t.values[src_e[bsel]], T1 - Sp.t.values[src_e[bsel]], rng)
         la = np.empty(n); lo = np.empty(n)
         pt = np.array([s not in fsmap for s in src_e], bool)
         la[pt], lo[pt] = sample_point_source(Sp.latitude.values[src_e[pt]], Sp.longitude.values[src_e[pt]], D_p[src_e[pt]], rho, rng)
@@ -199,13 +225,27 @@ class Simulator:
                 la[sel], lo[sel] = sample_finite(rr, int(sel.sum()), D_p[j], rho, float(rr["L"]), rng)
         gen = pd.concat([gen, pd.DataFrame(dict(sim=sim_e, t=tt, lat=la, lon=lo, m=self.sample_mag(n)))], ignore_index=True)
         allev = [gen]; ngen = 0
+        zk, zd = self.cfg.get("zone_km"), self.cfg.get("zone_days")
         while len(gen) and ngen < 60:
             ne = expected_aftershocks([gen.m.values, np.zeros(len(gen)), T1 - gen.t.values], pars)
+            zg = np.zeros(len(gen), bool)
+            if ob is not None and self.R is not None and zk:
+                zg = fs.zone_mask(gen.t.values, gen.lat.values, gen.lon.values, self.R, zk, zd, T_ORIGIN)
+                if zg.any():
+                    ne[zg] = fs.big_expected(gen.m.values[zg], np.zeros(zg.sum()), T1 - gen.t.values[zg], pars[0], mref, ob, expected_aftershocks)
+            if self.seq is not None:  # yeni olayların verimlilik çarpanı ~ Gamma(ν, ν)
+                ne = ne * rng.gamma(self.seq.nu, 1.0 / self.seq.nu, len(ne))
             k = rng.poisson(ne)
             if k.sum() == 0:
                 break
             par = np.repeat(np.arange(len(gen)), k)
             tt = gen.t.values[par] + TK.sample(np.zeros(len(par)), T1 - gen.t.values[par], rng)
+            if zg.any():
+                pz = zg[par]
+                if pz.any():
+                    if not hasattr(self, "TKb"):
+                        self.TKb = TimeKernel(c, ob, tau)
+                    tt[pz] = gen.t.values[par][pz] + self.TKb.sample(np.zeros(pz.sum()), T1 - gen.t.values[par][pz], rng)
             Dn = d * np.exp(g * (gen.m.values[par] - mref))
             la, lo = sample_point_source(gen.lat.values[par], gen.lon.values[par], Dn, rho, rng)
             gen = pd.DataFrame(dict(sim=gen.sim.values[par], t=tt, lat=la, lon=lo, m=self.sample_mag(len(par))))

@@ -1,0 +1,47 @@
+{
+ "name": "Duyarl\u0131l\u0131k: Mc 3.5 + serbest arka plan, bant 15 km + dizi-\u00f6zg\u00fc verimlilik (\u03bd=0.3)",
+ "catalog": "data/processed/etas_girdi_2010_M25.csv",
+ "out_dir": "data/processed/etas/duy_mc35_serbest_bw15",
+ "auxiliary_start": "2010-01-01 00:00:00",
+ "timewindow_start": "2014-01-01 00:00:00",
+ "timewindow_end": "2022-01-01 00:00:00",
+ "mc": 3.5,
+ "delta_m": 0.1,
+ "coppersmith_multiplier": 100,
+ "shape_coords": [
+  [
+   35,
+   25
+  ],
+  [
+   44,
+   25
+  ],
+  [
+   44,
+   46
+  ],
+  [
+   35,
+   46
+  ],
+  [
+   35,
+   25
+  ]
+ ],
+ "theta_0": {
+  "log10_mu": -6.5995059860142975,
+  "log10_k0": -2.0817069196164164,
+  "a": 1.6983634029922527,
+  "log10_c": -3.48406311069816,
+  "omega": -0.055177322576259645,
+  "log10_tau": 3.2166899260567825,
+  "log10_d": 0.5359213383425924,
+  "gamma": 0.6378626698242986,
+  "rho": 0.57108902129336
+ },
+ "free_background": true,
+ "bw_sq": 225,
+ "seq_nu": 0.3
+}

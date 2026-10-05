@@ -15,14 +15,20 @@ import simulate_forecast as SF  # noqa
 
 
 def main(T0, H, N, cfgs):
+    """N: model başına senaryo; tek bir 'ensemble' yapılandırması verilirse N toplamdır ve ağırlıklarla bölünür."""
+    import json
+    weights = [None] * len(cfgs)
+    if len(cfgs) == 1 and "ensemble" in json.load(open(cfgs[0])):
+        spec = json.load(open(cfgs[0])); cfgs = [c for c, _ in spec["ensemble"]]; weights = [w for _, w in spec["ensemble"]]
     per = []; allc = {}
     for i, cp in enumerate(cfgs):
         S = SF.Simulator(cp, seed=100 + i)
-        ev, info = S.run(T0, H, N)
+        Nm = N if weights[i] is None else int(round(N * weights[i]))
+        ev, info = S.run(T0, H, Nm)
         for name, (a0, a1, b0, b1) in SF.REGIONS.items():
             inr = ev.lat.between(a0, a1) & ev.lon.between(b0, b1)
             for thr in SF.THRESH:
-                cnt = ev[inr & (ev.m >= thr)].groupby("sim").size().reindex(range(N), fill_value=0).values
+                cnt = ev[inr & (ev.m >= thr)].groupby("sim").size().reindex(range(Nm), fill_value=0).values
                 allc.setdefault((name, thr), []).append(cnt)
                 per.append(dict(model=Path(cp).stem, bolge=name, esik=thr, olasilik=(cnt > 0).mean(), beklenen=cnt.mean()))
         print(cp, info, flush=True)
@@ -34,15 +40,16 @@ def main(T0, H, N, cfgs):
                          olasilik_model_araligi=f"{pm.olasilik.min():.3f}-{pm.olasilik.max():.3f}",
                          beklenen=round(c.mean(), 2), q05=int(np.percentile(c, 5)), q95=int(np.percentile(c, 95))))
     tab = pd.DataFrame(rows)
-    out = ROOT / "data/processed/tahmin" / f"topluluk_{T0}_{int(H)}g"; out.mkdir(parents=True, exist_ok=True)
+    tag = Path(sys.argv[4]).stem if len(sys.argv) == 5 else "topluluk"
+    out = ROOT / "data/processed/tahmin" / f"{tag}_{T0.replace(':', '')}_{int(H)}g"; out.mkdir(parents=True, exist_ok=True)
     tab.to_csv(out / "bolge_olasiliklari.txt", sep="\t", index=False); per.to_csv(out / "model_bazinda.txt", sep="\t", index=False)
-    L = [f"QuakeCast-TR topluluk tahmini — başlangıç {T0}, ufuk {int(H)} gün, {len(cfgs)} model x {N} senaryo",
-         "Modeller: " + ", ".join(Path(c).stem for c in cfgs), "",
+    L = [f"QuakeCast-TR topluluk tahmini — başlangıç {T0}, ufuk {int(H)} gün, {len(cfgs)} model",
+         "Modeller (ağırlık): " + ", ".join(f"{Path(c).stem} ({'eşit' if w is None else w})" for c, w in zip(cfgs, weights)), "",
          tab.to_string(index=False), "",
          "olasilik: en az bir olay olasılığı (tüm senaryolar); olasilik_model_araligi: modeller arası en düşük-en yüksek (parametre belirsizliği);",
          "q05-q95: olay sayısının %90 aralığı. Bölgeler yaklaşık enlem-boylam kutularıdır.",
-         "Kalibrasyon notu: 2022-2026 testlerinde model M>=3.5-4 sayılarını sistematik olarak fazla tahmin etti (bkz. kalibrasyon_tau1y.txt);",
-         "M>=5 için kalibrasyon kabul edilebilir düzeyde. Olasılıklar bu bilinen yanlılıkla birlikte yorumlanmalıdır."]
+         "Kalibrasyon notu: 2022-2026 CSEP testlerinde M>=3.5 sayıları özellikle büyük dizilerden sonraki aylarda fazla tahmin edildi",
+         "(v5: N-testi başarısızlığı ~%24-27, medyan simülasyon/gözlem 1.26). Olasılıklar bu bilinen yanlılıkla birlikte yorumlanmalıdır."]
     (out / "ozet.txt").write_text("\n".join(L) + "\n", encoding="utf-8")
     print("\n".join(L))
 

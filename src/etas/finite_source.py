@@ -122,12 +122,54 @@ def match_sources(times, mags, R, tol_s=2.0):
     return idx
 
 
-def patch_calc(calc, R, inversion_module):
-    """Paket nesnesine sonlu kaynak uygular: uzaklıkları değiştirir, çekirdek ve olabilirliği sarmalar."""
+def time_norm(omega, c, tau, upper_gamma_ext):
+    """T(ω) = ∫_0^∞ e^{-t/τ} (t+c)^{-1-ω} dt = e^{c/τ} τ^{-ω} Γ(-ω, c/τ)"""
+    return np.exp(c / tau) * tau ** (-omega) * upper_gamma_ext(-omega, c / tau)
+
+
+def big_time_ratio(t, omega, omega_big, c, tau, upper_gamma_ext):
+    """Büyük kaynak için normalize zaman yoğunluğu oranı pdf_big(t)/pdf_base(t) (toplam verimlilik korunur)."""
+    return (time_norm(omega, c, tau, upper_gamma_ext) / time_norm(omega_big, c, tau, upper_gamma_ext)) * (np.asarray(t) + c) ** (omega - omega_big)
+
+
+def big_expected(m, t_start, t_end, theta8, mc, omega_big, expected_aftershocks):
+    """Büyük kaynakların [t_start, t_end] içindeki beklenen artçı sayısı: toplam (taban ω ile) × büyük-pdf penceredeki pay."""
+    th_b = list(theta8); th_b[3] = omega_big
+    tot = expected_aftershocks(np.asarray(m), [theta8, mc], no_start=True, no_end=True)
+    frac = expected_aftershocks([np.asarray(m), np.asarray(t_start), np.asarray(t_end)], [th_b, mc]) / \
+        expected_aftershocks(np.asarray(m), [th_b, mc], no_start=True, no_end=True)
+    return tot * frac
+
+
+def zone_mask(tnum, lat, lon, R, km, days, origin):
+    """Büyük yırtılmaların artçı bölgesi: yırtılma hattına <= km ve yırtılmadan sonra (0, days] gün içindeki olaylar.
+    tnum: origin'den itibaren gün (sayısal)."""
+    tnum = np.asarray(tnum, float); lat = np.asarray(lat, float); lon = np.asarray(lon, float)
+    out = np.zeros(len(tnum), bool)
+    if not km or not days:
+        return out
+    rt = (pd.to_datetime(R.time) - pd.Timestamp(origin)).dt.total_seconds().values / 86400
+    for k in np.nonzero(R.finite.values)[0]:
+        dt = tnum - rt[k]
+        sel = (dt > 1e-6) & (dt <= days) & ~out
+        if sel.any():
+            d2 = dist2_to_rupture(lat[sel], lon[sel], R.iloc[k])
+            idx = np.nonzero(sel)[0]
+            out[idx[d2 <= km * km]] = True
+    return out
+
+
+def patch_calc(calc, R, inversion_module, omega_big=None, zone_km=None, zone_days=None):
+    """Paket nesnesine sonlu kaynak uygular: uzaklıkları değiştirir, çekirdek ve olabilirliği sarmalar.
+    omega_big verilirse, sonlu kaynaklar (M>=6) için ayrı Omori üssü (p_büyük = 1+omega_big) kullanılır;
+    toplam verimlilik taban modelle aynı tutulur, sadece zaman dağılımı değişir."""
     cat = calc.catalog
     src_ids = calc.source_events.index.values
     k_of = match_sources(cat.loc[src_ids, "time"].values, cat.loc[src_ids, "magnitude"].values, R)
     L_by_src = pd.Series(np.where(k_of >= 0, R.L.values[np.maximum(k_of, 0)], 0.0), index=src_ids)
+    tn = (pd.to_datetime(cat.loc[src_ids, "time"]) - pd.Timestamp("2000-01-01")).dt.total_seconds().values / 86400
+    zm = zone_mask(tn, cat.loc[src_ids, "latitude"].values, cat.loc[src_ids, "longitude"].values, R, zone_km, zone_days, "2000-01-01")
+    TB_by_src = pd.Series((k_of >= 0) | zm, index=src_ids)  # hızlı (büyük dizi) zaman çekirdeği kullanan kaynaklar
     dist = calc.distances
     te = calc.target_events
     for s, k in zip(src_ids, k_of):
@@ -144,6 +186,10 @@ def patch_calc(calc, R, inversion_module):
     orig_kernel = inversion_module.triggering_kernel
     orig_nll = inversion_module.neg_log_likelihood
 
+    uge = inversion_module.upper_gamma_ext
+    ea = inversion_module.expected_aftershocks
+    ll_term = inversion_module.ll_aftershock_term
+
     def kernel(metrics, params):
         res = orig_kernel(metrics, params)
         m = metrics[2]
@@ -153,16 +199,38 @@ def patch_calc(calc, R, inversion_module):
             Ls = L_by_src.reindex(m.index.get_level_values("source_id")).fillna(0).values
             D = d * np.exp(g * (m.values - mc))
             res = res * np.exp(-log_Z_ratio(Ls, D, rho))
+            if omega_big is not None:
+                big = TB_by_src.reindex(m.index.get_level_values("source_id")).fillna(False).values.astype(bool)
+                c = 10 ** theta[4]; om = theta[5]; tau = 10 ** theta[6]
+                r = np.ones(len(Ls))
+                r[big] = big_time_ratio(np.asarray(metrics[0])[big], om, omega_big, c, tau, uge)
+                res = res * r
         return res
 
     def nll(theta, Pij, source_events, mc_min):
         base = orig_nll(theta, Pij, source_events, mc_min)
         log10_k0, a, log10_c, omega, log10_tau, log10_d, gamma, rho = theta
         Ls = L_by_src.reindex(Pij.index.get_level_values("source_id")).fillna(0).values
-        if not (Ls > 0).any():
+        if not (Ls > 0).any() and not (omega_big is not None and TB_by_src.any()):
             return base
         D = 10 ** log10_d * np.exp(gamma * (Pij["source_magnitude"].values - mc_min))
         corr = (Pij["Pij"].values * Pij["zeta_plus_1"].values * log_Z_ratio(Ls, D, rho))[Ls > 0].sum()
+        if omega_big is not None:
+            big = TB_by_src.reindex(Pij.index.get_level_values("source_id")).fillna(False).values.astype(bool)
+            c = 10 ** log10_c; tau = 10 ** log10_tau
+            tt = Pij["time_distance"].values[big]
+            def lpdf(om):
+                return om * np.log(tau) - np.log(uge(-om, c / tau)) - (1 + om) * np.log(tt + c)
+            corr -= (Pij["Pij"].values[big] * Pij["zeta_plus_1"].values[big] * (lpdf(omega_big) - lpdf(omega))).sum()
+            se = source_events
+            Lsrc = TB_by_src.reindex(se.index).fillna(False).values.astype(bool)
+            if Lsrc.any():
+                ms = se["source_magnitude"].values[Lsrc]
+                ts = se["pos_source_to_start_time_distance"].values[Lsrc]; te_ = se["source_to_end_time_distance"].values[Lsrc]
+                G0 = ea([ms, ts, te_], [theta, mc_min])
+                Gb = big_expected(ms, ts, te_, theta, mc_min, omega_big, ea)
+                lh = se["l_hat"].values[Lsrc]
+                corr -= (ll_term(lh, Gb) - ll_term(lh, G0)).sum()
         return base + corr
 
     inversion_module.triggering_kernel = kernel

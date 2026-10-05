@@ -63,7 +63,7 @@ def main(cfg_path):
         sys.path.insert(0, str(ROOT / "src" / "etas"))
         import finite_source as fs
         R = pd.read_csv(ROOT / cfg.get("ruptures", "data/processed/etas/rupturler.csv"), parse_dates=["time"])
-        n_fs = fs.patch_calc(calc, R, inv_mod)
+        n_fs = fs.patch_calc(calc, R, inv_mod, omega_big=cfg.get("omega_big"), zone_km=cfg.get("zone_km"), zone_days=cfg.get("zone_days"))
         print(f"sonlu kaynak: {n_fs} kaynak olay çizgisel çekirdekle", flush=True)
     t_prep = time.time() - t0
     theta_old = parameter_dict2array(state["theta"])

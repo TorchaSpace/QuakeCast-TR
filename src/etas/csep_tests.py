@@ -88,8 +88,17 @@ def main(cfg, tag=None):
         if time.time() - t0 > 120:
             print("SURE DOLDU"); break
         if S is None:
-            S = SF.Simulator(cfg, seed=21)
-        ev, _ = S.run(str(T0.date()), H, N_SIM)
+            import json as _j
+            spec = _j.load(open(cfg))
+            if "ensemble" in spec:  # ağırlıklı topluluk: her model N_SIM·w senaryo
+                S = [(SF.Simulator(c_, seed=21 + q), w_) for q, (c_, w_) in enumerate(spec["ensemble"])]
+            else:
+                S = [(SF.Simulator(cfg, seed=21), 1.0)]
+        parts_ = []; off = 0
+        for sim_, w_ in S:
+            n_ = int(round(N_SIM * w_)) if len(S) > 1 else N_SIM
+            e_, _ = sim_.run(str(T0.date()), H, n_); e_["sim"] = e_["sim"] + off; off += n_; parts_.append(e_)
+        ev = pd.concat(parts_, ignore_index=True)
         ev["m"] = np.round(ev.m, 1)
         obs = cat[(cat.time >= T0) & (cat.time < T0 + pd.Timedelta(days=H))]
         r = dict(baslangic=str(T0.date()), **window_tests(ev, obs, rng))
