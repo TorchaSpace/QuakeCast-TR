@@ -60,3 +60,6 @@ lightning_logs/
 *.swp
 .DS_Store
 Thumbs.db
+
+# --- Loglar ---
+logs/
