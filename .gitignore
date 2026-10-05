@@ -1,0 +1,62 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Ortamlar ---
+.venv/
+venv/
+env/
+.env
+.env.*
+!.env.example
+.conda/
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+
+# --- Veri (büyük dosyalar repoya girmez) ---
+data/raw/
+data/interim/
+data/processed/
+data/external/
+!data/**/.gitkeep
+*.csv
+*.parquet
+*.h5
+*.hdf5
+*.nc
+*.zip
+*.tar.gz
+
+# --- Model / deney çıktıları ---
+models/
+checkpoints/
+runs/
+outputs/
+mlruns/
+wandb/
+lightning_logs/
+*.pt
+*.pth
+*.ckpt
+
+# --- CBS ---
+*.shp.xml
+*.qgz~
+
+# --- Editör / OS ---
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
