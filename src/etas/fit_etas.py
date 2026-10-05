@@ -37,7 +37,7 @@ def main(cfg_path):
         coppersmith_multiplier=cfg["coppersmith_multiplier"], shape_coords=cfg["shape_coords"],
         theta_0=state["theta"], name=cfg.get("name", "QuakeCast-TR ETAS"),
         free_background=cfg.get("free_background", False), free_productivity=cfg.get("free_productivity", False),
-        bw_sq=cfg.get("bw_sq", 2))
+        bw_sq=cfg.get("bw_sq", 2), fixed_parameters=cfg.get("fixed_parameters"))
     logging.basicConfig(level=logging.WARNING)
     calc = ETASParameterCalculation(meta)
     calc.prepare()
@@ -45,6 +45,13 @@ def main(cfg_path):
     if cfg.get("free_background") and pb_f.exists():  # serbest arka plan durumu kaldığı yerden
         pb = pd.read_csv(pb_f, index_col=0).iloc[:, 0]
         calc.target_events["P_background"] = pb.reindex(calc.target_events.index).fillna(0.1).values
+    if cfg.get("finite_source"):
+        import etas.inversion as inv_mod
+        sys.path.insert(0, str(ROOT / "src" / "etas"))
+        import finite_source as fs
+        R = pd.read_csv(ROOT / cfg.get("ruptures", "data/processed/etas/rupturler.csv"), parse_dates=["time"])
+        n_fs = fs.patch_calc(calc, R, inv_mod)
+        print(f"sonlu kaynak: {n_fs} kaynak olay çizgisel çekirdekle", flush=True)
     t_prep = time.time() - t0
     theta_old = parameter_dict2array(state["theta"])
     print(f"hazırlık {t_prep:.0f} s; hedef olay {len(calc.target_events)}, kaynak olay {len(calc.source_events)}", flush=True)

@@ -38,6 +38,10 @@ def region_area(poly):
 
 
 def load_model(mdir):
+    if str(mdir).endswith(".json"):  # doğrudan yapılandırma dosyası
+        cfg = json.loads((ROOT / mdir).read_text())
+        md = ROOT / cfg["out_dir"]
+        return cfg, json.loads((md / "durum.json").read_text()), md
     mdir = ROOT / mdir
     cfg = next(json.loads(p.read_text()) for p in (ROOT / "configs").glob("etas*.json")
                if json.loads(p.read_text())["out_dir"].rstrip("/") == str(mdir.relative_to(ROOT)))
@@ -47,6 +51,8 @@ def load_model(mdir):
 
 def background_fn(cfg, st, mdir, cat):
     th = st["theta"]; mu = 10 ** th["log10_mu"]
+    if cfg.get("bg_adaptive"):
+        return adaptive_background(cfg, st, mdir)
     if not cfg.get("free_background"):
         return (lambda lat, lon: np.full(len(lat), mu)), None
     # eğitim hedef olaylarının konumları: paketin hazırlığıyla aynı filtre
@@ -69,6 +75,23 @@ def background_fn(cfg, st, mdir, cat):
             out[s:s + 200] = (np.exp(-0.5 * r2 / bw2) / (2 * np.pi * bw2) * pb[None]).sum(1) / T
         return out
     return mu_x, float(pb.sum() / T)
+
+
+def adaptive_background(cfg, st, mdir):
+    """select_background.py ile seçilmiş uyarlamalı çekirdek + tek tip taban."""
+    import select_background as SB
+    par = json.loads((mdir / "arka_plan_uyarlamali.json").read_text())
+    lat_j, lon_j, P, T = SB.training_targets(cfg, st, mdir)
+    h = SB.bandwidths(lat_j, lon_j, int(par["k"]), par["h_min"])
+    A = region_area(cfg["shape_coords"]); w = par["w"]; rate = P.sum() / T
+
+    def mu_x(lat, lon):
+        out = np.empty(len(lat))
+        for s in range(0, len(lat), 200):
+            K = SB.kernel_matrix(np.asarray(lat[s:s + 200]), np.asarray(lon[s:s + 200]), lat_j, lon_j, h)
+            out[s:s + 200] = rate * ((1 - w) * (K * P[None]).sum(1) / P.sum() + w / A)
+        return out
+    return mu_x, float(rate)
 
 
 def evaluate(mdir):

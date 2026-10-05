@@ -24,7 +24,7 @@ M_TEST = 3.5
 T_ORIGIN = pd.Timestamp("2010-01-01")
 
 
-def evaluate(mdir):
+def evaluate(mdir, windows=None):
     cfg, st, mdir = E.load_model(mdir)
     th = st["theta"]; beta = st["beta"]; dm = cfg["delta_m"]
     var = cfg["mc"] == "var"; mref = cfg["m_ref"] if var else cfg["mc"]
@@ -50,6 +50,12 @@ def evaluate(mdir):
     prod = k0 * np.exp(a * (S.magnitude.values - mref)) * xi
     zone = d * np.exp(g * (S.magnitude.values - mref))
     ts, las, los = S.t.values, S.latitude.values, S.longitude.values
+    fs_cols = []
+    if cfg.get("finite_source"):
+        import finite_source as fs
+        R = pd.read_csv(ROOT / cfg.get("ruptures", "data/processed/etas/rupturler.csv"), parse_dates=["time"])
+        k_of = fs.match_sources(S.time.values, S.magnitude.values, R)
+        fs_cols = [(j, R.iloc[k], np.exp(-fs.log_Z_ratio(R.L.values[k], zone[j], rho))) for j, k in enumerate(k_of) if k >= 0]
     scale35 = np.exp(-beta * (M_TEST - mref))  # λ_{>=3.5} = λ_{>=mref} · e^{-β(3.5-mref)}
     mu_x, mu_tot = E.background_fn(cfg, st, mdir, pd.read_csv(ROOT / cfg["catalog"], parse_dates=["time"]))
 
@@ -62,12 +68,19 @@ def evaluate(mdir):
             msk = dt > 0
             dtp = np.where(msk, dt, 1.0)
             r2 = E.hav_sq(lat[sl, None], lon[sl, None], las[None, si], los[None, si])
-            gij = prod[None, si] * np.exp(-dtp / tau) / (dtp + c) ** (1 + om) / (r2 + zone[None, si]) ** (1 + rho)
+            kap = np.ones(len(si))
+            if fs_cols:
+                pos = {v: q for q, v in enumerate(si)}
+                for j, rr, kp in fs_cols:
+                    if j in pos:
+                        r2[:, pos[j]] = fs.dist2_to_rupture(lat[sl], lon[sl], rr); kap[pos[j]] = kp
+            gij = kap[None] * prod[None, si] * np.exp(-dtp / tau) / (dtp + c) ** (1 + om) / (r2 + zone[None, si]) ** (1 + rho)
             out[sl] = (gij * msk).sum(1) + (mu_x(lat[sl], lon[sl]) if bg is None else bg[sl])
         return out * scale35
 
     res = []
-    for w0, w1 in E.WINDOWS[:2]:
+    wins = windows if windows is not None else E.WINDOWS[:2]
+    for w0, w1 in wins:
         T0 = (pd.Timestamp(w0) - T_ORIGIN).days; T1 = (pd.Timestamp(w1) - T_ORIGIN).days
         idx = np.nonzero((ev.t.values >= T0) & (ev.t.values < T1) & observed)[0]
         lt = lam35(ev.t.values[idx], ev.latitude.values[idx], ev.longitude.values[idx])
@@ -102,6 +115,8 @@ def evaluate(mdir):
         LL = np.log(lobs).sum() - (trig + bgi - corr)
         res.append(dict(model=cfg["name"], pencere=f"{w0}..{w1}", n_gozlenebilir=len(idx), beklenen=round(trig + bgi - corr, 1),
                         maske_duzeltmesi=round(corr, 1), LL=round(LL, 1), LL_olay_basi=round(LL / len(idx), 4)))
+    if windows is not None:
+        return res
     tot = dict(model=cfg["name"], pencere=f"{E.WINDOWS[2][0]}..{E.WINDOWS[2][1]}",
                n_gozlenebilir=sum(r["n_gozlenebilir"] for r in res), beklenen=round(sum(r["beklenen"] for r in res), 1),
                maske_duzeltmesi=round(sum(r["maske_duzeltmesi"] for r in res), 1), LL=round(sum(r["LL"] for r in res), 1))

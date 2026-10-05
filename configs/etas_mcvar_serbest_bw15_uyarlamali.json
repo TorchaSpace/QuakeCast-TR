@@ -1,0 +1,48 @@
+{
+ "name": "De\u011fi\u015fken Mc + uyarlamal\u0131 arka plan",
+ "catalog": "data/processed/etas_girdi_2010_M25_mcvar.csv",
+ "out_dir": "data/processed/etas/mcvar_serbest_bw15",
+ "auxiliary_start": "2010-01-01 00:00:00",
+ "timewindow_start": "2014-01-01 00:00:00",
+ "timewindow_end": "2022-01-01 00:00:00",
+ "mc": "var",
+ "delta_m": 0.1,
+ "coppersmith_multiplier": 100,
+ "shape_coords": [
+  [
+   35,
+   25
+  ],
+  [
+   44,
+   25
+  ],
+  [
+   44,
+   46
+  ],
+  [
+   35,
+   46
+  ],
+  [
+   35,
+   25
+  ]
+ ],
+ "theta_0": {
+  "log10_mu": -6.73433858600913,
+  "log10_k0": -2.0093201478830673,
+  "a": 1.556905369335326,
+  "log10_c": -3.9309422038152295,
+  "omega": -0.09350582785923067,
+  "log10_tau": 3.3080225265466194,
+  "log10_d": 0.6358367406116823,
+  "gamma": 0.544513589601337,
+  "rho": 0.5522849856228652
+ },
+ "free_background": true,
+ "bw_sq": 225,
+ "m_ref": 3.5,
+ "bg_adaptive": true
+}

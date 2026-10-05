@@ -1,0 +1,51 @@
+{
+ "name": "Kararl\u0131l\u0131k: e\u011fitim 2014_2020",
+ "catalog": "data/processed/etas_girdi_2010_M25_mcvar.csv",
+ "out_dir": "data/processed/etas/kararlilik/pencere_2014_2020",
+ "auxiliary_start": "2010-01-01 00:00:00",
+ "timewindow_start": "2014-01-01 00:00:00",
+ "timewindow_end": "2021-01-01 00:00:00",
+ "mc": "var",
+ "delta_m": 0.1,
+ "coppersmith_multiplier": 100,
+ "shape_coords": [
+  [
+   35,
+   25
+  ],
+  [
+   44,
+   25
+  ],
+  [
+   44,
+   46
+  ],
+  [
+   35,
+   46
+  ],
+  [
+   35,
+   25
+  ]
+ ],
+ "theta_0": {
+  "log10_mu": -6.598773816036787,
+  "log10_k0": -2.1808493652065395,
+  "a": 1.7320523999127722,
+  "log10_c": -4.258448159401236,
+  "omega": -0.13091637501997483,
+  "log10_tau": 2.5625902246063346,
+  "log10_d": 0.6058417191702178,
+  "gamma": 0.29808942505391356,
+  "rho": 0.5123510615104743
+ },
+ "free_background": true,
+ "bw_sq": 225,
+ "m_ref": 3.5,
+ "finite_source": true,
+ "fixed_parameters": {
+  "log10_tau": 2.5625902246063346
+ }
+}
