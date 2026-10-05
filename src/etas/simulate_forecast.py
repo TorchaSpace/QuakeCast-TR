@@ -138,8 +138,13 @@ class Simulator:
         if cfg.get("finite_source"):
             self.R = pd.read_csv(ROOT / cfg.get("ruptures", "data/processed/etas/rupturler.csv"), parse_dates=["time"])
         # dizi-özgü verimlilik (Bayesçi Gamma çarpanı; seq_update.py)
-        self.seq = None
-        if cfg.get("seq_nu"):
+        self.seq = None; self.omori = None
+        if cfg.get("seq_omori"):  # dizi-özgü Omori p + verimlilik (seq_omori.py)
+            import seq_omori as SO
+            so = cfg["seq_omori"]
+            self.omori = SO.OmoriPosterior(cfg_path, cfg["seq_nu"], so.get("mu", 0.0), so.get("sig", 0.2), so.get("m_p", 4.5))
+            self.TKo = {}
+        elif cfg.get("seq_nu"):
             import seq_update as SU
             self.seq = SU.Posterior(cfg_path, cfg["seq_nu"])
 
@@ -195,7 +200,30 @@ class Simulator:
             n_exp = n_exp.copy(); n_exp[jb] = Gb * C["xi"][past][keep][jb]
             if not hasattr(self, "TKb"):
                 self.TKb = TimeKernel(c, ob, tau)
-        if self.seq is not None:
+        kmat = None
+        if self.omori is not None:
+            O = self.omori; dlt = O.deltas; K = len(dlt)
+            if T0 > O.t_last + 1:
+                print(f"UYARI: dizi hazırlığı {O.t_last:.0f}. güne kadar; T0 sonrası olaylar sayılmıyor", flush=True)
+            jj = np.nonzero(past)[0][keep]
+            A_, B_, W_ = O.at(T0, jj)
+            omc = O.om_cur[jj]
+            # her δ için [T0,T1] içindeki beklenen doğrudan artçı (toplam verimlilik korunur)
+            NE = np.zeros((K, len(jj)))
+            for k in range(K):
+                for grp in [omc == omc.max(), omc != omc.max()]:
+                    if grp.any():
+                        NE[k, grp] = fs.big_expected(Sp.magnitude.values[grp], T0 - Sp.t.values[grp], T1 - Sp.t.values[grp],
+                                                     pars[0], mref, float(omc[grp][0] + dlt[k]), expected_aftershocks) * xip[keep][grp]
+            kmat = np.full((N_SIM, len(jj)), O.k0, np.int16)
+            full = np.nonzero(W_[:, O.k0] < 1 - 1e-9)[0]
+            if len(full):
+                cw = np.cumsum(W_[full], 1); u = rng.uniform(size=(N_SIM, len(full)))
+                kmat[:, full] = (u[:, :, None] > cw[None, :, :]).sum(-1).clip(0, K - 1)
+            Bsel = B_[np.arange(len(jj))[None, :], kmat]
+            Gm = rng.gamma(A_[None, :], 1.0 / Bsel)
+            lam_mat = NE[kmat, np.arange(len(jj))[None, :]] * Gm
+        elif self.seq is not None:
             if T0 > self.seq.t_last + 1:
                 print(f"UYARI: dizi hazırlığı {self.seq.t_last:.0f}. güne kadar; T0 sonrası olaylar sayılmıyor", flush=True)
             jj = np.nonzero(past)[0][keep]
@@ -212,7 +240,14 @@ class Simulator:
         sim_i, src_i = np.nonzero(cnt); reps = cnt[sim_i, src_i]
         sim_e = np.repeat(sim_i, reps); src_e = np.repeat(src_i, reps); n = len(src_e)
         tt = Sp.t.values[src_e] + TK.sample(T0 - Sp.t.values[src_e], T1 - Sp.t.values[src_e], rng)
-        if ob is not None and fsmap:
+        if kmat is not None:  # her çocuğun zamanı kendi δ'sına ait Omori çekirdeğinden
+            ke = kmat[sim_e, src_e]; oe = O.om_cur[jj][src_e] + dlt[ke]
+            for ov in np.unique(oe):
+                sel = oe == ov
+                if ov not in self.TKo:
+                    self.TKo[ov] = TimeKernel(c, ov, tau)
+                tt[sel] = Sp.t.values[src_e[sel]] + self.TKo[ov].sample(T0 - Sp.t.values[src_e[sel]], T1 - Sp.t.values[src_e[sel]], rng)
+        elif ob is not None and fsmap:
             bsel = np.isin(src_e, jb)
             if bsel.any():
                 tt[bsel] = Sp.t.values[src_e[bsel]] + self.TKb.sample(T0 - Sp.t.values[src_e[bsel]], T1 - Sp.t.values[src_e[bsel]], rng)
@@ -233,13 +268,34 @@ class Simulator:
                 zg = fs.zone_mask(gen.t.values, gen.lat.values, gen.lon.values, self.R, zk, zd, T_ORIGIN)
                 if zg.any():
                     ne[zg] = fs.big_expected(gen.m.values[zg], np.zeros(zg.sum()), T1 - gen.t.values[zg], pars[0], mref, ob, expected_aftershocks)
-            if self.seq is not None:  # yeni olayların verimlilik çarpanı ~ Gamma(ν, ν)
+            kn = None
+            if self.omori is not None:  # yeni olaylar: δ ~ önsel (M>=m_p), çarpan ~ Gamma(ν, ν)
+                O = self.omori; dlt = O.deltas
+                kn = np.full(len(gen), O.k0)
+                big = gen.m.values >= O.m_p - 0.05
+                if big.any():
+                    kn[big] = rng.choice(len(dlt), size=big.sum(), p=np.exp(O.lp_new))
+                    for k in np.unique(kn[big]):
+                        sl = big & (kn == k)
+                        ne[sl] = fs.big_expected(gen.m.values[sl], np.zeros(sl.sum()), T1 - gen.t.values[sl], pars[0], mref,
+                                                 float(om + dlt[k]), expected_aftershocks)
+                ne = ne * rng.gamma(O.nu, 1.0 / O.nu, len(ne))
+            elif self.seq is not None:  # yeni olayların verimlilik çarpanı ~ Gamma(ν, ν)
                 ne = ne * rng.gamma(self.seq.nu, 1.0 / self.seq.nu, len(ne))
             k = rng.poisson(ne)
             if k.sum() == 0:
                 break
             par = np.repeat(np.arange(len(gen)), k)
             tt = gen.t.values[par] + TK.sample(np.zeros(len(par)), T1 - gen.t.values[par], rng)
+            if kn is not None:
+                kp_ = kn[par]
+                for kk in np.unique(kp_):
+                    if kk == self.omori.k0:
+                        continue
+                    sel = kp_ == kk; ov = float(om + self.omori.deltas[kk])
+                    if ov not in self.TKo:
+                        self.TKo[ov] = TimeKernel(c, ov, tau)
+                    tt[sel] = gen.t.values[par][sel] + self.TKo[ov].sample(np.zeros(sel.sum()), T1 - gen.t.values[par][sel], rng)
             if zg.any():
                 pz = zg[par]
                 if pz.any():

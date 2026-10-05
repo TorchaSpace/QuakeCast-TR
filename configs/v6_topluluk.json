@@ -1,0 +1,14 @@
+{
+ "name": "v6 topluluk: 0.8 × (v3 + dizi-özgü verimlilik ve Omori p) + 0.2 × (sabit Mc 3.5 + serbest arka plan + aynı güncelleme)",
+ "ensemble": [
+  [
+   "configs/v6_dizi_omori.json",
+   0.8
+  ],
+  [
+   "configs/v6_sabitMc_dizi_omori.json",
+   0.2
+  ]
+ ],
+ "secim": "ağırlıklar doğrulama (2022-23) maskeli olabilirliğiyle 0.1 adımlı ızgarada seçildi (src/etas/ensemble_masked.py)"
+}

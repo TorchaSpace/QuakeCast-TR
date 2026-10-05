@@ -14,7 +14,12 @@ import seq_update as SU  # noqa: E402
 def parts(cfg, nu):
     P = SU.prepare_sparse(cfg)
     base = {r["pencere"]: r for r in json.loads(str(P["base"]))}
-    if nu > 0:
+    so = json.load(open(cfg)).get("seq_omori")
+    if so is not None:  # dizi-özgü Omori p + verimlilik
+        import seq_omori as SO
+        out, pr = SO.score_omori(P, SO.prepare_omori(cfg), nu, so.get("mu", 0.0), so.get("sig", 0.2), so.get("m_p", 4.5),
+                                 return_parts=True); dl = pr["dl"]
+    elif nu > 0:
         out, pr = SU.score_sparse(P, nu, 3.5, return_parts=True); dl = pr["dl"]
     else:
         out = [dict(pencere=k, dcomp=0.0, dLL=0.0) for k in base]; dl = np.zeros(len(P["tO"]))

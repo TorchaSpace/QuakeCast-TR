@@ -103,19 +103,31 @@ class ObsComp:
             out[q] = cum[b] + o[b] * (self.G([j], [dt[q]])[0] - self.G([j], [edges[b]])[0])
         return out
 
-    def E_source(self, j, t):
-        """Tek kaynak j için E_j(t), t dizisi (vektörel)."""
+    def G_om(self, j, dt, omega):
+        """Kaynak j için zaman dağılımı ω ile değiştirilmiş (toplam verimlilik korunur) kümülatif beklenen sayı."""
+        dt = np.maximum(np.asarray(dt, float), 0); out = np.zeros(len(dt)); pos = dt > 0
+        if pos.any():
+            mm = np.full(pos.sum(), self.m[j])
+            out[pos] = fs.big_expected(mm, np.zeros(pos.sum()), dt[pos], self.th8, self.mref, float(omega),
+                                       expected_aftershocks) * self.xi[j] * self.sc
+        return out
+
+    def E_source(self, j, t, omega=None):
+        """Tek kaynak j için E_j(t), t dizisi (vektörel). omega verilirse j'nin Omori üssü o değerle değiştirilir."""
         t = np.asarray(t, float); dt = t - self.ts[j]
         out = np.zeros(len(t)); pos = dt > 0
         if not pos.any():
             return out
-        Gt = self.G(np.full(pos.sum(), j), dt[pos])
+        Gf = (lambda d: self.G(np.full(len(d), j), d)) if omega is None else (lambda d: self.G_om(j, d, omega))
+        Gt = Gf(dt[pos])
         if j not in self.aff:
             out[pos] = self.fin[j] * Gt
             return out
         edges, o, cum = self.aff[j]
+        Ge = Gf(edges)
+        if omega is not None:
+            cum = np.r_[0.0, np.cumsum(o * np.diff(Ge))]
         b = np.minimum(np.searchsorted(edges, dt[pos]) - 1, len(o) - 1)
-        Ge = self.G(np.full(len(edges), j), edges)
         out[pos] = cum[b] + o[b] * (Gt - Ge[b])
         return out
 
