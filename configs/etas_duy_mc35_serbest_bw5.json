@@ -1,0 +1,46 @@
+{
+ "name": "Duyarl\u0131l\u0131k: Mc 3.5 + serbest arka plan, bant 5 km",
+ "catalog": "data/processed/etas_girdi_2010_M25.csv",
+ "out_dir": "data/processed/etas/duy_mc35_serbest_bw5",
+ "auxiliary_start": "2010-01-01 00:00:00",
+ "timewindow_start": "2014-01-01 00:00:00",
+ "timewindow_end": "2022-01-01 00:00:00",
+ "mc": 3.5,
+ "delta_m": 0.1,
+ "coppersmith_multiplier": 100,
+ "shape_coords": [
+  [
+   35,
+   25
+  ],
+  [
+   44,
+   25
+  ],
+  [
+   44,
+   46
+  ],
+  [
+   35,
+   46
+  ],
+  [
+   35,
+   25
+  ]
+ ],
+ "theta_0": {
+  "log10_mu": -6.854220994351556,
+  "log10_k0": -1.9722276654115902,
+  "a": 1.4675103887343444,
+  "log10_c": -4.091404620778892,
+  "omega": -0.10971063841013504,
+  "log10_tau": 3.320051286720716,
+  "log10_d": 0.6983370488325836,
+  "gamma": 0.48214438454930364,
+  "rho": 0.5325968200004383
+ },
+ "free_background": true,
+ "bw_sq": 25
+}

@@ -1,0 +1,45 @@
+{
+ "name": "Duyarl\u0131l\u0131k: serbest (mek\u00e2nsal) arka plan",
+ "catalog": "data/processed/etas_girdi_2010_M25.csv",
+ "out_dir": "data/processed/etas/duy_serbest_arkaplan",
+ "auxiliary_start": "2010-01-01 00:00:00",
+ "timewindow_start": "2014-01-01 00:00:00",
+ "timewindow_end": "2022-01-01 00:00:00",
+ "mc": 3.0,
+ "delta_m": 0.1,
+ "coppersmith_multiplier": 100,
+ "shape_coords": [
+  [
+   35,
+   25
+  ],
+  [
+   44,
+   25
+  ],
+  [
+   44,
+   46
+  ],
+  [
+   35,
+   46
+  ],
+  [
+   35,
+   25
+  ]
+ ],
+ "theta_0": {
+  "log10_mu": -6.532386363399732,
+  "log10_k0": -1.9182187008415783,
+  "a": 1.6125795522386805,
+  "log10_c": -2.993990032583364,
+  "omega": -0.08177062775821838,
+  "log10_tau": 3.441140576041442,
+  "log10_d": 0.5218749751658774,
+  "gamma": 0.6618694775730043,
+  "rho": 0.6478635883623725
+ },
+ "free_background": true
+}

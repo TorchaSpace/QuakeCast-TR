@@ -34,10 +34,16 @@ def main(cfg_path):
         auxiliary_start=cfg["auxiliary_start"], timewindow_start=cfg["timewindow_start"],
         timewindow_end=cfg["timewindow_end"], mc=cfg["mc"], delta_m=cfg["delta_m"],
         coppersmith_multiplier=cfg["coppersmith_multiplier"], shape_coords=cfg["shape_coords"],
-        theta_0=state["theta"], name=cfg.get("name", "QuakeCast-TR ETAS"))
+        theta_0=state["theta"], name=cfg.get("name", "QuakeCast-TR ETAS"),
+        free_background=cfg.get("free_background", False), free_productivity=cfg.get("free_productivity", False),
+        bw_sq=cfg.get("bw_sq", 2))
     logging.basicConfig(level=logging.WARNING)
     calc = ETASParameterCalculation(meta)
     calc.prepare()
+    pb_f = out / "P_background.csv"
+    if cfg.get("free_background") and pb_f.exists():  # serbest arka plan durumu kaldığı yerden
+        pb = pd.read_csv(pb_f, index_col=0).iloc[:, 0]
+        calc.target_events["P_background"] = pb.reindex(calc.target_events.index).fillna(0.1).values
     t_prep = time.time() - t0
     theta_old = parameter_dict2array(state["theta"])
     print(f"hazırlık {t_prep:.0f} s; hedef olay {len(calc.target_events)}, kaynak olay {len(calc.source_events)}", flush=True)
@@ -56,6 +62,8 @@ def main(cfg_path):
         state["gecmis"].append({"iter": state["iter"], "fark": diff, "n_hat": float(calc.n_hat), "dallanma_orani": br})
         state["beta"] = float(calc.beta); state["b"] = float(calc.beta / np.log(10))
         state_f.write_text(json.dumps(state, indent=1))
+        if cfg.get("free_background"):
+            calc.target_events[["P_background"]].to_csv(pb_f)
         print(f"iter {state['iter']}: fark={diff:.4f}  n_hat={calc.n_hat:.1f}  dallanma={br}  ({time.time()-ti:.0f} s)", flush=True)
         theta_old = theta_new
         if diff < 0.001:
