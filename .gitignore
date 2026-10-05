@@ -25,11 +25,11 @@ env/
 .ipynb_checkpoints/
 
 # --- Veri (büyük dosyalar repoya girmez) ---
-data/raw/
-data/interim/
-data/processed/
-data/external/
-!data/**/.gitkeep
+data/raw/*
+data/interim/*
+data/processed/*
+data/external/*
+!data/*/.gitkeep
 *.csv
 *.parquet
 *.h5
