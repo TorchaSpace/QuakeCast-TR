@@ -38,9 +38,22 @@ def main(cfg_path):
         theta_0=state["theta"], name=cfg.get("name", "QuakeCast-TR ETAS"),
         free_background=cfg.get("free_background", False), free_productivity=cfg.get("free_productivity", False),
         bw_sq=cfg.get("bw_sq", 2), fixed_parameters=cfg.get("fixed_parameters"))
+    if cfg.get("beta") is not None:
+        meta["beta"] = cfg["beta"]  # sayı ya da 'positive' (b-positive, van der Elst 2021)
     logging.basicConfig(level=logging.WARNING)
+    import etas.inversion as inv_mod
+    sys.path.insert(0, str(ROOT / "src" / "etas"))
+    import etas_patches as EP
+    if cfg.get("tau_fixed_days"):
+        EP.fix_tau_by_bounds(inv_mod, float(np.log10(cfg["tau_fixed_days"])))
+        meta["theta_0"] = dict(meta["theta_0"], log10_tau=float(np.log10(cfg["tau_fixed_days"])))
     calc = ETASParameterCalculation(meta)
     calc.prepare()
+    if cfg.get("bg_shape"):
+        import longterm_background as LB
+        f, area, _ = LB.load_shape()
+        EP.patch_bg_shape(calc, inv_mod, f, area)
+        print("arka plan şekli: uzun dönem haritası", flush=True)
     pb_f = out / "P_background.csv"
     if cfg.get("free_background") and pb_f.exists():  # serbest arka plan durumu kaldığı yerden
         pb = pd.read_csv(pb_f, index_col=0).iloc[:, 0]

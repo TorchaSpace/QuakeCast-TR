@@ -108,8 +108,25 @@ class Simulator:
         self.pars = [[th["log10_k0"], a, th["log10_c"], om, th["log10_tau"], th["log10_d"], g, rho], self.mref]
         import select_background as SB
         md = ROOT / cfg["out_dir"]
-        self.latj, self.lonj, self.P, Ttr = SB.training_targets(cfg, json.loads((md / "durum.json").read_text()), md)
-        self.rate_bg = self.P.sum() / Ttr
+        self.shape = None
+        if cfg.get("bg_shape"):
+            import longterm_background as LB
+            f, area_s, (glat, glon, dens) = LB.load_shape()
+            A = E.region_area(cfg["shape_coords"])
+            self.rate_bg = 10 ** th["log10_mu"] * A
+            ca = (111.2 * LB.GRID) * (111.2 * LB.GRID * np.cos(np.radians(glat)))[:, None] * np.ones((1, len(glon)))
+            pc = (dens * ca).ravel(); self.shape = (glat, glon, pc / pc.sum(), LB.GRID)
+            self.P = np.ones(1); self.latj = self.lonj = np.zeros(1)
+        else:
+            self.latj, self.lonj, self.P, Ttr = SB.training_targets(cfg, json.loads((md / "durum.json").read_text()), md)
+            self.rate_bg = self.P.sum() / Ttr
+        self.mix = None
+        if cfg.get("bg_mix"):
+            import longterm_background as LB
+            f, area_s, (glat, glon, dens) = LB.load_shape()
+            ca = (111.2 * LB.GRID) * (111.2 * LB.GRID * np.cos(np.radians(glat)))[:, None] * np.ones((1, len(glon)))
+            pc = (dens * ca).ravel()
+            self.mix = (json.loads((md / "arka_plan_karisim.json").read_text())["w"], (glat, glon, pc / pc.sum(), LB.GRID))
         if cfg.get("bg_adaptive"):
             bp = json.loads((md / "arka_plan_uyarlamali.json").read_text())
             self.h = SB.bandwidths(self.latj, self.lonj, int(bp["k"]), bp["h_min"]); self.w_unif = bp["w"]
@@ -123,6 +140,11 @@ class Simulator:
 
     def sample_bg(self, n):
         rng = self.rng
+        if self.shape is not None:
+            glat, glon, pc, G = self.shape
+            k = rng.choice(len(pc), size=n, p=pc)
+            i, j = np.divmod(k, len(glon))
+            return glat[i] + rng.uniform(-G / 2, G / 2, n), glon[j] + rng.uniform(-G / 2, G / 2, n)
         j = rng.choice(len(self.P), size=n, p=self.P / self.P.sum())
         if self.h is not None:
             u = rng.uniform(size=n); r = self.h[j] * np.sqrt(1 / (1 - u) ** 2 - 1)
@@ -133,6 +155,11 @@ class Simulator:
         uni = rng.uniform(size=n) < self.w_unif
         la0, la1, lo0, lo1 = self.box
         lat[uni] = rng.uniform(la0, la1, uni.sum()); lon[uni] = rng.uniform(lo0, lo1, uni.sum())
+        if self.mix is not None:
+            w, (glat, glon, pc, G) = self.mix
+            sel = rng.uniform(size=n) < w; m = sel.sum()
+            k = rng.choice(len(pc), size=m, p=pc); i, j = np.divmod(k, len(glon))
+            lat[sel] = glat[i] + rng.uniform(-G / 2, G / 2, m); lon[sel] = glon[j] + rng.uniform(-G / 2, G / 2, m)
         return lat, lon
 
     def sample_mag(self, n):

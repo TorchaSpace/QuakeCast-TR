@@ -74,5 +74,29 @@ def main(mdir_s):
     print(json.dumps(best, indent=1))
 
 
-if __name__ == "__main__":
+if __name__ == "__main__" and len(sys.argv) == 2:
     main(sys.argv[1])
+
+
+def mix_with_longterm(mdir_s):
+    """Serbest arka plan (EM'in 15 km Gauss yumuşatması) ile uzun dönem haritasının karışımı:
+    μ(x) = rate · [(1-w) · G_15km(x) + w · f_uzun(x)];  w eğitim hedeflerinde P-ağırlıklı LOO ile seçilir."""
+    import longterm_background as LB
+    cfg, st, mdir = E.load_model(mdir_s)
+    lat, lon, P, T = training_targets(cfg, st, mdir)
+    f, _, _ = LB.load_shape()
+    bw2 = cfg.get("bw_sq", 2)
+    r2 = E.hav_sq(lat[:, None], lon[:, None], lat[None], lon[None])
+    G = np.exp(-0.5 * r2 / bw2) / (2 * np.pi * bw2); np.fill_diagonal(G, 0)
+    g_loo = (G * P[None]).sum(1) / (P.sum() - P)
+    fl = f(lat, lon)
+    rows = []
+    for w in [0, 0.02, 0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 1.0]:
+        rows.append(dict(w=w, LOO_LL=float((P * np.log((1 - w) * g_loo + w * fl + 1e-300)).sum() / P.sum())))
+    df = pd.DataFrame(rows); best = df.loc[df.LOO_LL.idxmax()].to_dict()
+    (mdir / "arka_plan_karisim.json").write_text(json.dumps(best, indent=1))
+    print(df.to_string(index=False)); print("seçilen:", best)
+
+
+if __name__ == "__main__" and len(sys.argv) > 2 and sys.argv[2] == "karisim":
+    mix_with_longterm(sys.argv[1])

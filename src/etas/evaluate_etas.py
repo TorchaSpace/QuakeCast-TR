@@ -53,8 +53,20 @@ def background_fn(cfg, st, mdir, cat):
     th = st["theta"]; mu = 10 ** th["log10_mu"]
     if cfg.get("bg_adaptive"):
         return adaptive_background(cfg, st, mdir)
+    if cfg.get("bg_shape"):
+        import longterm_background as LB
+        f, area_s, _ = LB.load_shape()
+        A = region_area(cfg["shape_coords"])
+        return (lambda lat, lon: mu * A * f(lat, lon)), float(mu * A)
     if not cfg.get("free_background"):
         return (lambda lat, lon: np.full(len(lat), mu)), None
+    if cfg.get("bg_mix"):  # serbest arka plan + uzun dönem haritası karışımı
+        import longterm_background as LB
+        w = json.loads((mdir / "arka_plan_karisim.json").read_text())["w"]
+        cfg2 = dict(cfg); cfg2.pop("bg_mix")
+        g_x, rate = background_fn(cfg2, st, mdir, cat)
+        f, _, _ = LB.load_shape()
+        return (lambda lat, lon: (1 - w) * g_x(lat, lon) + w * rate * f(lat, lon)), rate
     # eğitim hedef olaylarının konumları: paketin hazırlığıyla aynı filtre
     cols = ["time", "latitude", "longitude", "magnitude"] + (["mc_current"] if cfg["mc"] == "var" else [])
     meta = dict(catalog=cat[cols].copy(), m_ref=cfg.get("m_ref"), auxiliary_start=cfg["auxiliary_start"],
