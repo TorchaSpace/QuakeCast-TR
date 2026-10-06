@@ -98,7 +98,8 @@ def build():
     B = mc.drop_exact_duplicates(mc.load_kandilli().dropna(subset=["time", "lat", "lon"]), "KANDILLI", log)
     buf = T_CUT - pd.Timedelta(days=2)
     As = A[A.time >= buf].reset_index(drop=True); Bs = B[B.time >= buf].reset_index(drop=True)
-    if len(Bs) and len(As):
+    n_cand = len(mc.candidates(As, Bs)[0]) if (len(Bs) and len(As)) else 0
+    if n_cand:  # Kandilli ~2 ay gecikmeli: örtüşen dönem yoksa aday çift olmaz (eşleştirme atlanır)
         m = mc.run_pair(As, Bs, "AFAD", "KANDILLI", par=frozen_par())
         pairs = pd.DataFrame({"AFAD_id": As.id.values[m["ia"]], "KANDILLI_id": Bs.id.values[m["ib"]]})
     else:

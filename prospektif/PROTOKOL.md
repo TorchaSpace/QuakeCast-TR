@@ -58,3 +58,4 @@ Amaç: dondurulmuş bir modelin tahminlerini **pencere başlamadan önce**, zama
 
 ## 8. Değişiklik günlüğü
 - 2026-10-06: Protokol, v6 dondurma, pilot yayınlar.
+- 2026-10-06: Veri hattı düzeltmesi (`live_catalog.py`): temiz ortamda Kandilli–AFAD örtüşmesi yokken eşleştirme çöküyordu; aday yoksa eşleştirme atlanıyor. Model/parametre/tahmin kodu değişmedi; manifestte `degisiklikler` kaydı.

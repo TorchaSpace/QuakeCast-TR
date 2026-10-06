@@ -38,7 +38,16 @@
   "src/data/fetch_afad.py": "1151f8f4c59d812e9661222034dcb5bcb81deb284d6a9cfd985b413c0c833498",
   "src/data/fetch_kandilli.py": "77581c39a75997331210fd3edc38cbbbb88f24f16e951ef0629f30123afaf6fd",
   "src/data/fetch_afad_web.py": "0822095d05a83d2f449068d226b003f2159a2634260cfdcb0fe0b1cf608c5319",
-  "src/prospective/live_catalog.py": "e7af578af657e62c38944c074a289f8d8507de17abb9fe3ab23b9d4ee6d05cec",
+  "src/prospective/live_catalog.py": "8b0d3bab61d22b3fc2f67b75594077b41e423e80b0232391b0d6103df2f9af52",
   "src/prospective/issue_forecast.py": "b2cc6f43a87b6a5f89853c9db5e97d47b5cfb67be18be13b8cee6895ceb34080"
- }
+ },
+ "degisiklikler": [
+  {
+   "tarih_utc": "2026-10-06T12:44:31",
+   "dosya": "src/prospective/live_catalog.py",
+   "eski_sha256": "e7af578af657e62c38944c074a289f8d8507de17abb9fe3ab23b9d4ee6d05cec",
+   "yeni_sha256": "8b0d3bab61d22b3fc2f67b75594077b41e423e80b0232391b0d6103df2f9af52",
+   "aciklama": "Veri hattı hatası: Kandilli ile AFAD canlı verisi zamanda örtüşmediğinde (temiz ortam, ör. GitHub Actions) eşleştirme aday çifti olmadan çöküyordu; aday yoksa eşleştirme atlanır. Model, parametreler ve tahmin kodu değişmedi; mevcut ortamda çıktı birebir aynı."
+  }
+ ]
 }
