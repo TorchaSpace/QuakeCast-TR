@@ -174,3 +174,99 @@ class OmoriPosterior:
         lw = self.LP[jj] + S - (self.nu + N)[:, None] * np.log(self.nu + E)
         lw -= logsumexp(lw, axis=1, keepdims=True)
         return self.nu + N, self.nu + E, np.exp(lw)
+
+
+# ---------------------------------------------------------------------------
+# GÜNLÜK güncelleme kipi (literatürdeki 1 günlük tahminlerle karşılaştırılabilir):
+#  - gün d'deki hedefler için yalnızca gün başından (UTC 00:00) önceki kaynaklar kullanılır (aynı gün tetiklemesi yok);
+#  - dizi sonsalındaki sayımlar (N, S) gün başında dondurulur; E_k(t) deterministik olduğundan sürekli kalır
+#    (ileriye bakış yok); kompanzatör aynı kapalı biçimle, sayım değişimleri ertesi gece yarısında.
+#  ν → ∞ ve tek δ = 0 ile güncellemesiz ETAS'ın günlük sürümü elde edilir.
+# ---------------------------------------------------------------------------
+def prepare_daily(cfg_path, deltas=DELTAS, force=False):
+    cfg0 = json.load(open(cfg_path)); out_dir = ROOT / cfg0["out_dir"]
+    tag = "_bgmix" if cfg0.get("bg_mix") else ""
+    fn = out_dir / f"dizi_gunluk{tag}_K{len(deltas)}.npz"
+    if fn.exists() and not force:
+        return dict(np.load(fn, allow_pickle=True))
+    t0 = time.time()
+    P = SU.prepare_sparse(cfg_path)
+    X = EM.evaluate(cfg_path, expose=True)
+    import obs_comp as OC
+    oc = OC.ObsComp(X, SU._days(SU.T_END))
+    th = X["th"]; om0 = th["omega"]; ob = X["omega_big"]
+    om_cur = np.where(oc.tb, ob if ob is not None else om0, om0)
+    SRC, EVT, tO, ts = P["SRC"], P["EVT"], P["tO"], P["ts"]
+    nS = len(P["m"]); K = len(deltas)
+    bounds = np.r_[0, np.cumsum(np.bincount(SRC, minlength=nS))]
+    EC = np.zeros((len(SRC), K), np.float32); ES = np.zeros((nS, K))
+    cE = np.ceil(tO[EVT]); cS = np.ceil(ts)
+    for k, dl in enumerate(deltas):
+        for j in range(nS):
+            ES[j, k] = oc.E_source(j, [cS[j]], omega=om_cur[j] + dl)[0]
+            a, b = bounds[j], bounds[j + 1]
+            if b > a:
+                EC[a:b, k] = oc.E_source(j, cE[a:b], omega=om_cur[j] + dl)
+        print(f"  günlük δ={dl:+.1f} ({time.time()-t0:.0f} s)", flush=True)
+    np.savez_compressed(fn, deltas=deltas, EC=EC, ES=ES)
+    return dict(np.load(fn, allow_pickle=True))
+
+
+def score_daily(P, Q, D, nu, mu=0.0, sig=0.2, m_p=4.5, windows=(SU.VAL, SU.TEST), base_only=False):
+    """Günlük güncellemeli öngörü: olay başına Δlog (sürekli taban λ'ya göre) ve pencere kompanzatör farkı."""
+    SRC, EVT = P["SRC"], P["EVT"]; L = P["LIJ"].astype(float); lt = P["lam_tot"]; tO = P["tO"]; ts = P["ts"]; BT = P["BT"]
+    m = P["m"]; deltas = Q["deltas"]
+    if base_only:  # güncellemesiz ETAS: tek δ=0, ν → ∞
+        kk = [int(np.argmin(np.abs(deltas)))]; nu = 1e9; sig = 1e-6; m_p = 99
+    else:
+        kk = list(range(len(deltas)))
+    dsel = np.asarray(deltas)[kk]; K = len(kk); k0 = int(np.argmin(np.abs(dsel)))
+    EIJ = Q["EIJ"][:, kk].astype(float); LR = Q["LR"][:, kk].astype(float); EB = Q["EB"][:, :, kk]
+    dk = [int(np.argmin(np.abs(D["deltas"] - d))) for d in dsel]
+    EC = D["EC"][:, dk].astype(float); ES = D["ES"][:, dk]
+    LP = log_prior(dsel, mu, sig, m, m_p)
+    Pij = L / lt[EVT]; tE = tO[EVT]; ds = np.floor(tE)
+    same = ts[SRC] >= ds                       # kaynak hedefle aynı gün → günlük tahminde yok
+    # gün başına kadar (tE < ds_e) aynı kaynağın çocuk sayımları
+    key = SRC * 1e5 + tE; csP = np.r_[0.0, np.cumsum(Pij)]; csS = np.vstack([np.zeros(K), np.cumsum(Pij[:, None] * LR, 0)])
+    first = np.r_[True, SRC[1:] != SRC[:-1]]; gstart = np.maximum.accumulate(np.where(first, np.arange(len(SRC)), 0))
+    pos = np.searchsorted(key, SRC * 1e5 + ds, side="left")
+    Nds = csP[pos] - csP[gstart]; Sds = csS[pos] - csS[gstart]
+    lw = LP[SRC] + Sds - (nu + Nds)[:, None] * np.log(nu + EIJ); lw -= logsumexp(lw, axis=1, keepdims=True)
+    gpred = (np.exp(lw) * (nu + Nds)[:, None] / (nu + EIJ) * np.exp(LR)).sum(1)
+    contrib = np.where(same, -L, (gpred - 1) * L)
+    lam_d = lt + np.bincount(EVT, weights=contrib, minlength=len(tO))
+    dl = np.log(np.maximum(lam_d, 1e-300) / lt)
+    out = []
+    posE = np.searchsorted(key, SRC * 1e5 + np.ceil(tE), side="left")   # gece yarısı c_e'den önceki tüm çocuklar
+    Nc = csP[posE] - csP[gstart]; Sc = csS[posE] - csS[gstart]
+    for w0, w1 in windows:
+        T0, T1 = float(SU._days(w0)), float(SU._days(w1))
+        b0 = np.nonzero(BT == T0)[0][0]; b1 = np.nonzero(BT == T1)[0][0]
+        iw = (tO >= T0) & (tO < T1)
+        sj = np.nonzero(ts < T1)[0]
+        st = np.where(ts[sj] < T0, T0, np.ceil(ts[sj])); okj = st < T1; sj, st = sj[okj], st[okj]
+        Est = np.where((ts[sj] < T0)[:, None], EB[b0, sj, :], ES[sj, :])
+        # başlangıçtaki sayımlar: st'den önceki çocuklar
+        kst = np.searchsorted(key, sj * 1e5 + st, side="left")
+        gst = np.searchsorted(key, sj * 1e5 - 0.5, side="left")
+        Nst = csP[kst] - csP[gst]; Sst = csS[kst] - csS[gst]
+        ce = np.ceil(tE); chg = (ce > np.maximum(T0, np.ceil(ts[SRC]))) & (ce < T1)
+        rs = np.r_[sj, SRC[chg], sj]
+        rt = np.r_[st, ce[chg], np.full(len(sj), T1)]
+        rk = np.r_[np.zeros(len(sj)), 1 + np.arange(chg.sum()), np.full(len(sj), 1e12)]
+        rN = np.r_[Nst, Nc[chg], np.zeros(len(sj))]
+        rS = np.vstack([Sst, Sc[chg], np.zeros((len(sj), K))])
+        rE = np.vstack([Est, EC[chg], EB[b1, sj, :]])
+        o = np.lexsort((rk, rt, rs)); rs, rN, rS, rE = rs[o], rN[o], rS[o], rE[o]
+        sm = rs[1:] == rs[:-1]
+        Na, Sa, Ea = rN[:-1][sm], rS[:-1][sm], rE[:-1][sm]; Eb_ = np.maximum(rE[1:][sm], Ea)
+        lwa = LP[rs[:-1][sm]] + Sa - (nu + Na)[:, None] * np.log(nu + Ea); lwa -= logsumexp(lwa, axis=1, keepdims=True)
+        if base_only:
+            term = (Eb_ - Ea)[:, 0]
+        else:
+            term = -logsumexp(lwa + (nu + Na)[:, None] * (np.log(nu + Ea) - np.log(nu + Eb_)), axis=1)
+        base_trig = (EB[b1, ts < T1, k0] - EB[b0, ts < T1, k0]).sum()
+        dcomp = term.sum() - base_trig
+        out.append(dict(pencere=f"{w0}..{w1}", n=int(iw.sum()), dlog=dl[iw].sum(), dcomp=dcomp, dLL=dl[iw].sum() - dcomp))
+    return out, dl
