@@ -172,7 +172,8 @@ def main(cfg_path):
 def prepare_sparse(cfg_path, thr=1e-4, force=False):
     cfg0 = json.load(open(cfg_path))
     out_dir = ROOT / cfg0["out_dir"]; tag = "_bgmix" if cfg0.get("bg_mix") else ""
-    fn = out_dir / (f"dizi_seyrek{tag}.npz" if T_END == "2026-08-01" else f"dizi_seyrek{tag}_{T_END}.npz")
+    ptag = os.environ.get("QC_PREP_TAG", "")
+    fn = out_dir / (f"dizi_seyrek{tag}.npz" if T_END == "2026-08-01" and not ptag else f"dizi_seyrek{tag}_{T_END}{'_' + ptag if ptag else ''}.npz")
     if fn.exists() and not force:
         return dict(np.load(fn, allow_pickle=True))
     t0 = time.time()

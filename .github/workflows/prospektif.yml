@@ -1,0 +1,51 @@
+name: Prospektif tahmin ve değerlendirme
+
+on:
+  schedule:
+    - cron: "30 20 * * *"   # her gün 20:30 UTC: ertesi gün başlayan pencereler yayınlanır, bitenler puanlanır
+  workflow_dispatch:
+    inputs:
+      gun:
+        description: "Pencere başlangıç günü (YYYY-MM-DD); boş bırakılırsa yarın"
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: prospektif
+  cancel-in-progress: false
+
+jobs:
+  calistir:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Bağımlılıklar (dondurulmuş sürümler)
+        run: |
+          pip install numpy==2.2.6 scipy==1.15.3 pandas==2.3.3 matplotlib==3.10.9 geopandas==1.1.4 shapely==2.1.2 pynverse tabulate
+          # etas kütüphanesi: dondurulmuş commit; kod ~/etasrepo yolundan içe aktarır (yerel kurulumla aynı)
+          git clone -q https://github.com/lmizrahi/etas.git "$HOME/etasrepo"
+          git -C "$HOME/etasrepo" checkout -q 097f08b69a4f06f9c38d14799dedfbd4543144e3
+      - name: Dondurulmuş model paketini aç ve doğrula
+        run: python3 src/prospective/paket.py ac
+      - name: Canlı katalog (AFAD + Kandilli)
+        run: python3 src/prospective/live_catalog.py
+      - name: Tahmin yayını
+        run: python3 src/prospective/schedule.py ${{ github.event.inputs.gun }}
+      - name: Değerlendirme
+        run: python3 src/prospective/evaluate_forecasts.py
+      - name: Sonuçları kaydet
+        run: |
+          cp data/processed/prospektif/etas_girdi_canli.json prospektif/son_katalog_durumu.json
+          git config user.name "quakecast-prospektif"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add prospektif/
+          if ! git diff --cached --quiet; then
+            git commit -m "Prospektif: $(date -u +%Y-%m-%dT%H:%MZ) yayın/değerlendirme"
+            git push
+          fi

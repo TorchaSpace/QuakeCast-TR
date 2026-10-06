@@ -63,3 +63,6 @@ Thumbs.db
 
 # --- Loglar ---
 logs/
+
+# Prospektif kayıt: tahmin ve defter dosyaları depoya girmeli
+!prospektif/**/*.csv

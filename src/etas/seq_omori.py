@@ -34,7 +34,8 @@ def _logr(dt, om_cur, om_new, c, tau):
 def prepare_omori(cfg_path, deltas=DELTAS, force=False):
     cfg0 = json.load(open(cfg_path)); out_dir = ROOT / cfg0["out_dir"]
     tag = "_bgmix" if cfg0.get("bg_mix") else ""
-    suf = "" if SU.T_END == "2026-08-01" else f"_{SU.T_END}"
+    ptag = os.environ.get("QC_PREP_TAG", "")
+    suf = ("" if SU.T_END == "2026-08-01" else f"_{SU.T_END}") + (f"_{ptag}" if ptag else "")
     fn = out_dir / f"dizi_omori{tag}{suf}.npz"
     if fn.exists() and not force:
         return dict(np.load(fn, allow_pickle=True))

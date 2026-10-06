@@ -28,7 +28,7 @@ def evaluate(mdir, windows=None, expose=False, comp="kaynak"):
     cfg, st, mdir = E.load_model(mdir)
     th = st["theta"]; beta = st["beta"]; dm = cfg["delta_m"]
     var = cfg["mc"] == "var"; mref = cfg["m_ref"] if var else cfg["mc"]
-    cat = pd.read_csv(ROOT / "data/processed/etas_girdi_2010_M25.csv", parse_dates=["time"])
+    cat = pd.read_csv(ROOT / os.environ.get("QC_KATALOG", "data/processed/etas_girdi_2010_M25.csv"), parse_dates=["time"])
     cat["magnitude"] = np.floor(cat.magnitude / dm + 0.5) * dm
     poly = cfg["shape_coords"]
     tn = (cat.time - T_ORIGIN).dt.total_seconds().values / 86400

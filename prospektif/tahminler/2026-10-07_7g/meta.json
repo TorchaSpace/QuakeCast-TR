@@ -1,0 +1,27 @@
+{
+ "model": "QuakeCast-TR v6 topluluk (0.8 v6_dizi_omori + 0.2 v6_sabitMc_dizi_omori)",
+ "model_manifest_sha256": "b7374a37a9be2bb857617c19d1dfe64cb6116df930a9159ba07188bab3cd8cec",
+ "kod_commit": "290479dea284d4250669266de19d4275e7abe618",
+ "pencere_baslangic": "2026-10-07 00:00:00",
+ "pencere_bitis": "2026-10-14 00:00:00",
+ "ufuk_gun": 7,
+ "yayin_zamani_utc": "2026-10-06 08:28:47.222494",
+ "gec_yayin": false,
+ "veri_kesimi_son_olay": "2026-10-06T02:22:08.00",
+ "katalog_sha256": "77856652a28a63af95a5626a5aeea4d744b3e81036697e2cf21eb43b84857739",
+ "n_sim": 5000,
+ "uyeler": [
+  [
+   "configs/v6_dizi_omori.json",
+   0.8
+  ],
+  [
+   "configs/v6_sabitMc_dizi_omori.json",
+   0.2
+  ]
+ ],
+ "hedef": "Mw>=3.5 (0.1 yuvarlama), 35-44K 25-46D, olay_turu=deprem",
+ "medyan_N": 8.0,
+ "q025_N": 2.0,
+ "q975_N": 29.024999999999636
+}

@@ -39,18 +39,9 @@ def gor(x, y):
                 lo=float(np.percentile(x, 1)), hi=float(np.percentile(x, 99)))
 
 
-def main():
-    A = mc.load_afad(); B = mc.load_kandilli()
-    log = []
-    A = mc.drop_exact_duplicates(A.dropna(subset=["time", "lat", "lon"]), "AFAD", log)
-    B = mc.drop_exact_duplicates(B.dropna(subset=["time", "lat", "lon"]), "KANDILLI", log)
-    REP.extend(log)
-    pairs = pd.concat([pd.read_csv(E / f, sep="\t", dtype={"AFAD_id": str, "KANDILLI_id": str},
-                                   usecols=["AFAD_id", "KANDILLI_id", "guven"])
-                       for f in ["eslesen_afad_kandilli.txt", "zayif_veya_belirsiz_afad_kandilli.txt"]])
-    pairs = pairs.drop_duplicates("AFAD_id").drop_duplicates("KANDILLI_id")
-    REP.append(f"Birleştirilen çift: {len(pairs):,} (" + ", ".join(f"{k}={v:,}" for k, v in pairs.guven.value_counts().items()) + ")")
-
+def build_events(A, B, pairs, conv=None):
+    """Kaynaklar (id indeksli olmayan) + eşleşme çiftleri -> birleşik olay tablosu. conv verilirse (dondurulmuş GOR
+    katsayıları) yeniden uydurulmaz; prospektif artımlı güncelleme bunu kullanır."""
     A = A.set_index("id"); B = B.set_index("id")
     ev = pd.DataFrame({"afad_id": pairs.AFAD_id.values, "kandilli_id": pairs.KANDILLI_id.values})
     ev = pd.concat([ev,
@@ -77,21 +68,22 @@ def main():
 
     # --- büyüklük dönüşümleri ---
     mw_ref = ev[["A_MW", "K_MW"]].mean(axis=1)
-    conv = {}
-    for name, x in [("AFAD_ML", ev.A_ML), ("AFAD_MD", ev.A_MD), ("KANDILLI_ML", ev.K_ML), ("KANDILLI_MD", ev.K_MD)]:
-        sel = x.notna() & mw_ref.notna() & (mw_ref >= 2.5)
-        if sel.sum() >= 200:
-            conv[name] = gor(x[sel].values.astype(float), mw_ref[sel].values.astype(float))
-    # MD için doğrudan Mw çifti azsa: MD -> (aynı olayın) ML -> Mw zinciri
-    for ag, mlc, mdc in [("AFAD", "A_ML", "A_MD"), ("KANDILLI", "K_ML", "K_MD")]:
-        if f"{ag}_MD" not in conv:
-            other_ml = ev.K_ML if ag == "AFAD" else ev.A_ML
-            sel = ev[mdc].notna() & other_ml.notna() & (other_ml >= 2.5)
-            oth = "KANDILLI_ML" if ag == "AFAD" else "AFAD_ML"
-            if sel.sum() >= 200 and oth in conv:
-                r1 = gor(ev[mdc][sel].values.astype(float), other_ml[sel].values.astype(float)); r2 = conv[oth]
-                conv[f"{ag}_MD"] = dict(a=r2["a"] + r2["b"] * r1["a"], b=r2["b"] * r1["b"], n=r1["n"],
-                                        s=float(np.hypot(r1["s"] * r2["b"], r2["s"])), lo=r1["lo"], hi=r1["hi"], zincir=oth)
+    if conv is None:
+        conv = {}
+        for name, x in [("AFAD_ML", ev.A_ML), ("AFAD_MD", ev.A_MD), ("KANDILLI_ML", ev.K_ML), ("KANDILLI_MD", ev.K_MD)]:
+            sel = x.notna() & mw_ref.notna() & (mw_ref >= 2.5)
+            if sel.sum() >= 200:
+                conv[name] = gor(x[sel].values.astype(float), mw_ref[sel].values.astype(float))
+        # MD için doğrudan Mw çifti azsa: MD -> (aynı olayın) ML -> Mw zinciri
+        for ag, mlc, mdc in [("AFAD", "A_ML", "A_MD"), ("KANDILLI", "K_ML", "K_MD")]:
+            if f"{ag}_MD" not in conv:
+                other_ml = ev.K_ML if ag == "AFAD" else ev.A_ML
+                sel = ev[mdc].notna() & other_ml.notna() & (other_ml >= 2.5)
+                oth = "KANDILLI_ML" if ag == "AFAD" else "AFAD_ML"
+                if sel.sum() >= 200 and oth in conv:
+                    r1 = gor(ev[mdc][sel].values.astype(float), other_ml[sel].values.astype(float)); r2 = conv[oth]
+                    conv[f"{ag}_MD"] = dict(a=r2["a"] + r2["b"] * r1["a"], b=r2["b"] * r1["b"], n=r1["n"],
+                                            s=float(np.hypot(r1["s"] * r2["b"], r2["s"])), lo=r1["lo"], hi=r1["hi"], zincir=oth)
     REP.append("\nBüyüklük dönüşümleri (GOR, Mw = a + b·M; referans = kurumların Mw ortalaması, Mw>=2.5):")
     for k, r in conv.items():
         REP.append(f"  {k:12s} -> Mw: a={r['a']:+.3f} b={r['b']:.3f}  n={r['n']:,}  σ={r['s']:.2f}  geçerli aralık ≈ {r['lo']:.1f}-{r['hi']:.1f}" + (f"  (zincir: {r['zincir']})" if "zincir" in r else ""))
@@ -132,6 +124,22 @@ def main():
                                   "A_mag", "A_magtype", "K_mag", "K_ML", "K_MD", "K_MW", "yer"]]
     out["time"] = out.time.dt.strftime("%Y-%m-%dT%H:%M:%S.%f").str[:-4]
     out.Mw = out.Mw.round(2)
+    return out, conv
+
+
+def main():
+    A = mc.load_afad(); B = mc.load_kandilli()
+    log = []
+    A = mc.drop_exact_duplicates(A.dropna(subset=["time", "lat", "lon"]), "AFAD", log)
+    B = mc.drop_exact_duplicates(B.dropna(subset=["time", "lat", "lon"]), "KANDILLI", log)
+    REP.extend(log)
+    pairs = pd.concat([pd.read_csv(E / f, sep="\t", dtype={"AFAD_id": str, "KANDILLI_id": str},
+                                   usecols=["AFAD_id", "KANDILLI_id", "guven"])
+                       for f in ["eslesen_afad_kandilli.txt", "zayif_veya_belirsiz_afad_kandilli.txt"]])
+    pairs = pairs.drop_duplicates("AFAD_id").drop_duplicates("KANDILLI_id")
+    REP.append(f"Birleştirilen çift: {len(pairs):,} (" + ", ".join(f"{k}={v:,}" for k, v in pairs.guven.value_counts().items()) + ")")
+
+    out, conv = build_events(A, B, pairs)
     out.to_csv(OUT / "katalog_birlesik.txt", sep="\t", index=False)
     REP.append(f"\nBirleşik katalog: {len(out):,} olay  -> data/processed/katalog_birlesik.txt")
     REP.append("  kaynak: " + ", ".join(f"{k}={v:,}" for k, v in out.kaynaklar.value_counts().items()))
