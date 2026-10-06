@@ -1,0 +1,51 @@
+{
+ "name": "CV B: \u03c4=1 y, p_b\u00fcy\u00fck yok",
+ "catalog": "data/processed/etas_girdi_2010_M25_mcvar.csv",
+ "out_dir": "data/processed/etas/cv/B_t365np",
+ "auxiliary_start": "2010-01-01 00:00:00",
+ "timewindow_start": "2014-01-01 00:00:00",
+ "timewindow_end": "2020-01-01 00:00:00",
+ "mc": "var",
+ "delta_m": 0.1,
+ "coppersmith_multiplier": 100,
+ "shape_coords": [
+  [
+   35,
+   25
+  ],
+  [
+   44,
+   25
+  ],
+  [
+   44,
+   46
+  ],
+  [
+   35,
+   46
+  ],
+  [
+   35,
+   25
+  ]
+ ],
+ "theta_0": {
+  "log10_mu": -6.719531381632869,
+  "log10_k0": -2.1238406377910533,
+  "a": 1.6694571651781016,
+  "log10_c": -3.903260502869972,
+  "omega": -0.09250089050732095,
+  "log10_tau": 2.5625902246063346,
+  "log10_d": 0.6626467436950892,
+  "gamma": 0.2893814333371729,
+  "rho": 0.5292512093555726
+ },
+ "free_background": true,
+ "bw_sq": 225,
+ "m_ref": 3.5,
+ "finite_source": true,
+ "fixed_parameters": {
+  "log10_tau": 2.5625902246063346
+ }
+}
