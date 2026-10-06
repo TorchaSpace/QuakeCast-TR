@@ -1,0 +1,46 @@
+{
+ "name": "Katalog v2 E3: sabit Mc + serbest arka plan, e\u011fitim 2011\u20132022",
+ "catalog": "data/processed/v2/etas_girdi_v2_2000_M25.csv",
+ "out_dir": "data/processed/etas/v2kat_E3_sabit",
+ "auxiliary_start": "2008-01-01 00:00:00",
+ "timewindow_start": "2011-01-01 00:00:00",
+ "timewindow_end": "2022-01-01 00:00:00",
+ "mc": 3.5,
+ "delta_m": 0.1,
+ "coppersmith_multiplier": 100,
+ "shape_coords": [
+  [
+   35,
+   25
+  ],
+  [
+   44,
+   25
+  ],
+  [
+   44,
+   46
+  ],
+  [
+   35,
+   46
+  ],
+  [
+   35,
+   25
+  ]
+ ],
+ "theta_0": {
+  "log10_mu": -6.73433858600913,
+  "log10_k0": -2.0093201478830673,
+  "a": 1.556905369335326,
+  "log10_c": -3.9309422038152295,
+  "omega": -0.09350582785923067,
+  "log10_tau": 3.3080225265466194,
+  "log10_d": 0.6358367406116823,
+  "gamma": 0.544513589601337,
+  "rho": 0.5522849856228652
+ },
+ "free_background": true,
+ "bw_sq": 225
+}

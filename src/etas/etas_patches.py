@@ -31,3 +31,12 @@ def fix_tau_by_bounds(inv_module, log10_tau):
     rng = list(inv_module.RANGES)
     rng[6] = (log10_tau, log10_tau)
     cls.optimize_parameters.__defaults__ = (tuple(rng),)
+
+
+def fix_bounds(inv_module, fixed):
+    """Birden çok parametreyi sınırlarla sabitler: fixed = {RANGES indeksi: değer} (ör. 3: a, 6: log10_tau)."""
+    cls = inv_module.ETASParameterCalculation
+    rng = list(inv_module.RANGES)
+    for k, v in fixed.items():
+        rng[k] = (v, v)
+    cls.optimize_parameters.__defaults__ = (tuple(rng),)

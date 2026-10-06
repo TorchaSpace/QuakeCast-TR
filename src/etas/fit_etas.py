@@ -44,9 +44,15 @@ def main(cfg_path):
     import etas.inversion as inv_mod
     sys.path.insert(0, str(ROOT / "src" / "etas"))
     import etas_patches as EP
+    fixed = {}
     if cfg.get("tau_fixed_days"):
-        EP.fix_tau_by_bounds(inv_mod, float(np.log10(cfg["tau_fixed_days"])))
-        meta["theta_0"] = dict(meta["theta_0"], log10_tau=float(np.log10(cfg["tau_fixed_days"])))
+        fixed[6] = float(np.log10(cfg["tau_fixed_days"]))
+        meta["theta_0"] = dict(meta["theta_0"], log10_tau=fixed[6])
+    if cfg.get("a_sabit") is not None:  # verimlilik üssü a sabit (α = a − ργ); eksiklik kaynaklı düşük-α yanlılığı testi
+        fixed[3] = float(cfg["a_sabit"])
+        meta["theta_0"] = dict(meta["theta_0"], a=fixed[3])
+    if fixed:
+        EP.fix_bounds(inv_mod, fixed)
     calc = ETASParameterCalculation(meta)
     calc.prepare()
     if cfg.get("bg_shape"):
