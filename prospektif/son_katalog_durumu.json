@@ -1,11 +1,11 @@
 {
- "son_olay": "2026-10-11T18:56:58.00",
- "n": 103053,
- "n_yeni": 657,
- "sha256": "d58098dc44f18f55c54ac2c03e2b0aed1d9b8e10ed3e888677fccf2e62b3a45a",
+ "son_olay": "2026-10-12T22:12:25.00",
+ "n": 103059,
+ "n_yeni": 663,
+ "sha256": "cb269c9ab90c7e4c0c37cd40f48b4de6ee389ccf58ad7f816a5cc432b55eb8e2",
  "kandilli_son": "2026-07-31 23:51:30.430000",
  "kaynaklar_yeni": {
-  "AFAD": 657
+  "AFAD": 663
  },
  "n_M35_son30g": 40
 }
